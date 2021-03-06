@@ -1,0 +1,45 @@
+﻿enum{
+	DHE,
+	Hello
+};
+
+// Define number of clients
+#define NoOfClients 1;
+
+// Define ciper suite (we only use DHE)
+var cipherSuite = DHE;
+
+// Define p and g variables for all clients
+var p[NoOfClients]; // p[clientID] = p value of client with clientID
+var g[NoOfClients]; // g[clientID] = g value of client with clientID
+
+// Define random keys of server and client
+var serverRandomKey[NoOfClients]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
+var clientRandomKey[NoOfClients]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
+
+// Define messages sent by server and client
+var serverMessage[NoOfClients]; // serverMessage[clientID] = server message (Ms) corresponding to clientID
+var clientMessage[NoOfClients]; // clientMessage[clientID] = client message (Mc) corresponding to clientID
+
+channel network 0;
+
+var test = -2;
+
+// Client processes
+Client(clientID) =
+	GenerateP{p[clientID] = clientID} ->
+	GenerateG{g[clientID] = clientID} ->
+	network!clientID.p[clientID] ->
+	network!clientID.g[clientID] ->
+	network?clientID.y{test = y} ->
+	Skip;
+	
+Server() =
+	network?clientID.clientP ->
+	network?clientID.clientQ ->
+	network!clientID.clientP ->
+	Skip;
+
+TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server();
+
+#assert TLS() deadlockfree;
