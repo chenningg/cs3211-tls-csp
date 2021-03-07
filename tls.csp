@@ -11,13 +11,15 @@ enum{
 // Define ciper suite (we only use DHE)
 var cipherSuite = DHE;
 
+// TODO: Currently we hardcode to have 3 clients supported
+
 // Define p and g variables for all clients
-var p[NoOfClients]; // p[clientID] = p value of client with clientID
-var g[NoOfClients]; // g[clientID] = g value of client with clientID
+var p = [2, 3, 4]; // p[clientID] = p value of client with clientID
+var g = [8, 9, 16]; // g[clientID] = g value of client with clientID
 
 // Define random keys of server and client
-var serverRandomKey[NoOfClients]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
-var clientRandomKey[NoOfClients]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
+var serverRandomKey = [123, 234, 456]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
+var clientRandomKey = [100, 101, 102]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
 
 // Define premaster keys of server and client
 var serverPreMasterKey[NoOfClients]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
@@ -27,15 +29,13 @@ var clientPreMasterKey[NoOfClients]; // clientRandomKey[clientID] = client rando
 var serverMessage[NoOfClients]; // serverMessage[clientID] = server message (Ms) corresponding to clientID
 var clientMessage[NoOfClients]; // clientMessage[clientID] = client message (Mc) corresponding to clientID
 
+// Track clients connected to the server
+var clientConnectedTo[NoOfClients];
+var serverConnectedTo[NoOfClients];
+
 channel network 0;
 
 var test = -2;
-var randomServerMsg = 1234;
-var randomServerKey = 34567;
-var randomClientKey = 191919;
-var PremasterClientKey = 23232323;
-var PremasterServerKey = 1231231232;
-
 
 var debug;
 var ServerCertificate;
@@ -43,57 +43,66 @@ var ServerCertificateSignature;
 
 
 
+// =====================================
 // Client processes
+// =====================================
 Client(clientID) =
-	GenerateP{p[clientID] = clientID} -> // TODO: Change this
-	GenerateG{g[clientID] = clientID} -> // TODO: CHange this
-	network!clientID.clientID ->
+	GenerateP{p[clientID] = p[clientID]} -> // TODO: Generate random p
+	GenerateG{g[clientID] = g[clientID]} -> // TODO: Generate random g
+	network!clientID.clientID -> // Send clientID, p and g to server
 	network!clientID.p[clientID] ->
 	network!clientID.g[clientID] ->
-	network?clientID.cipherVal ->
-	network?clientID.serverMsg{test = serverMsg} ->
-	ClientReceiveCert(clientID,serverMsg);
+	network?clientID.cipherVal -> // Get response from server
+	network?clientID.serverMsg{test = serverMsg} -> // TODO: How to store this?
+	ClientReceiveCert(clientID, serverMsg);
 	
-ClientReceiveCert(clientID,serverMsg) = 
+// Get server certificate for verification
+ClientReceiveCert(clientID, serverMsg) = 
 	network?clientID.serverCert ->
 	network?clientID.serverCertSignature ->
-	ClientGeneratePreMaseter(clientID,serverMsg);
+	ClientGeneratePreMaster(clientID, serverMsg);
 
-ClientGeneratePreMaseter(clientID,serverMsg) =
-	GenerateClientRandomKey{clientRandomKey[clientID] = randomClientKey } -> // TODO: Generate random key
-	GeneratePreMasterKey{clientPreMasterKey[clientID] = PremasterClientKey } ->  // TODO: Compute premaster key based on serverMsg
-	network!clientID.clientRandomKey[clientID] -> 
-	ClientConnected ->
+// Generate client's premaster key
+ClientGeneratePreMaster(clientID, serverMsg) =
+	GenerateClientRandomKey{clientRandomKey[clientID] = clientRandomKey[clientID] } -> // TODO: Generate random key
+	GenerateClientPreMasterKey{clientPreMasterKey[clientID] = g[clientID]^clientRandomKey[clientID] % p[clientID] } ->
+	ClientConnectedTo{clientConnectedTo[clientID] = 1} ->
+	network!clientID.clientRandomKey[clientID] -> // Send client random key to server
 	Skip;
 	
-	
+// =====================================
+// Server processes
+// =====================================
 Server() =
-	network?x.clientID ->
+	network?x.clientID -> // Receive clientID, p and g from client
 	network?x.clientP ->
 	network?x.clientG ->
-	GenerateServerRandomKey{serverRandomKey[clientID] = randomServerKey } -> // TODO: Generate random server key
-	GenerateServerMessage{serverMessage[clientID] = randomServerMsg} ->  // TODO: Compute  server message based on random key
-	ServerHello(x,clientID);
+	GenerateServerRandomKey{serverRandomKey[clientID] = serverRandomKey[clientID]} -> // TODO: Generate random server key
+	GenerateServerMessage{serverMessage[clientID] = (clientG ^ serverRandomKey[clientID]) % clientP} ->  // TODO: Implement calculation and how to store?
+	ServerHello(x, clientID);
 	
-ServerHello(x,clientID) =
-	network!x.cipherSuite ->
-	network!x.serverMessage[clientID] -> 
-	ServerSendCert(x,clientID);
-	
-ServerSendCert(x,clientID) = 
-	network!x.ServerCertificate ->
+// Send server hello back to client
+ServerHello(x, clientID) =
+	network!x.cipherSuite -> // Send cipher suite chosen (DHE)
+	network!x.serverMessage[clientID] -> // Send server message to client
+	ServerSendCert(x, clientID);
+
+// Send server certificate to verify itself to the client	
+ServerSendCert(x, clientID) = 
+	network!x.ServerCertificate ->  
 	network!x.ServerCertificateSignature ->
-	ServerGeneratePreMaster(x,clientID);
+	ServerGeneratePreMaster(x, clientID);
 	
-ServerGeneratePreMaster(x,clientID) = 
-	network?x.clientMessageReceived -> 
-	GeneratePreMasterKey{serverPreMasterKey[clientID] = PremasterServerKey;debug = clientMessageReceived} -> // TODO: Compute server premasterkey based on clientMessageReceived
-	ServerConnected -> 
-	Stop;
+// Generate server's premaster key
+ServerGeneratePreMaster(x, clientID) = 
+	network?x.clientMessageReceived -> // Read client's message from client
+	GenerateServerPreMasterKey{serverPreMasterKey[clientID] = (clientMessageReceived ^ serverRandomKey[clientID]) % p[clientID]} -> // TODO: Compute server premasterkey based on clientMessageReceived
+	ServerConnected(clientID);
 	
-
-
-	
+// Update server connection
+ServerConnected(clientID) =
+	ServerConnectedTo{serverConnectedTo[clientID] = 1} ->
+	Skip;
 
 TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server();
 
