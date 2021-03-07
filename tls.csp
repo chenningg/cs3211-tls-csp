@@ -1,9 +1,10 @@
-﻿//# include "Random";
+﻿#import "PAT.Lib.RandomNumber";
 
 enum{
 	DHE,
 	Hello
 };
+
 
 // Define number of clients
 #define NoOfClients 1;
@@ -30,6 +31,7 @@ var clientMessage[NoOfClients]; // clientMessage[clientID] = client message (Mc)
 channel network 0;
 
 var test = -2;
+var randomClientMsg = 1234567;
 var randomServerMsg = 1234;
 var randomServerKey = 34567;
 var randomClientKey = 191919;
@@ -60,7 +62,7 @@ ClientReceiveCert(clientID,serverMsg) =
 	ClientGeneratePreMaseter(clientID,serverMsg);
 
 ClientGeneratePreMaseter(clientID,serverMsg) =
-	GenerateClientRandomKey{clientRandomKey[clientID] = randomClientKey } -> // TODO: Generate random key
+	GenerateClientRandomKey{clientRandomKey[clientID] = call(randomNumber)} -> // TODO: Generate random key
 	GeneratePreMasterKey{clientPreMasterKey[clientID] = PremasterClientKey } ->  // TODO: Compute premaster key based on serverMsg
 	network!clientID.clientRandomKey[clientID] -> 
 	ClientConnected ->
@@ -71,7 +73,7 @@ Server() =
 	network?x.clientID ->
 	network?x.clientP ->
 	network?x.clientG ->
-	GenerateServerRandomKey{serverRandomKey[clientID] = randomServerKey } -> // TODO: Generate random server key
+	GenerateServerRandomKey{serverRandomKey[clientID] = call(randomNumber) } -> // TODO: Generate random server key
 	GenerateServerMessage{serverMessage[clientID] = randomServerMsg} ->  // TODO: Compute  server message based on random key
 	ServerHello(x,clientID);
 	
