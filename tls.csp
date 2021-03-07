@@ -1,9 +1,10 @@
-﻿//# include "Random";
+﻿#import "PAT.Lib.RandomNumber";
 
 enum{
 	DHE,
 	Hello
 };
+
 
 // Define number of clients
 #define NoOfClients 1;
@@ -62,10 +63,9 @@ ClientReceiveCert(clientID, serverMsg) =
 	network?clientID.serverCertSignature ->
 	ClientGeneratePreMaster(clientID, serverMsg);
 
-// Generate client's premaster key
 ClientGeneratePreMaster(clientID, serverMsg) =
-	GenerateClientRandomKey{clientRandomKey[clientID] = clientRandomKey[clientID] } -> // TODO: Generate random key
-	GenerateClientPreMasterKey{clientPreMasterKey[clientID] = g[clientID]^clientRandomKey[clientID] % p[clientID] } ->
+	GenerateClientRandomKey{clientRandomKey[clientID] = call(randomNumber) } -> // TODO: Generate random key
+	GenerateClientPreMasterKey{clientPreMasterKey[clientID] = g[clientID]^clientRandomKey[clientID] % p[clientID] } -> // TODO: Compute premaster key based on serverMsg
 	ClientConnectedTo{clientConnectedTo[clientID] = 1} ->
 	network!clientID.clientRandomKey[clientID] -> // Send client random key to server
 	Skip;
@@ -77,7 +77,7 @@ Server() =
 	network?x.clientID -> // Receive clientID, p and g from client
 	network?x.clientP ->
 	network?x.clientG ->
-	GenerateServerRandomKey{serverRandomKey[clientID] = serverRandomKey[clientID]} -> // TODO: Generate random server key
+	GenerateServerRandomKey{serverRandomKey[clientID] = call(randomNumber) } -> // TODO: Generate random server key
 	GenerateServerMessage{serverMessage[clientID] = (clientG ^ serverRandomKey[clientID]) % clientP} ->  // TODO: Implement calculation and how to store?
 	ServerHello(x, clientID);
 	
