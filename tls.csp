@@ -17,6 +17,10 @@ var g[NoOfClients]; // g[clientID] = g value of client with clientID
 var serverRandomKey[NoOfClients]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
 var clientRandomKey[NoOfClients]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
 
+// Define premaster keys of server and client
+var serverPreMasterKey[NoOfClients]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
+var clientPreMasterKey[NoOfClients]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
+
 // Define messages sent by server and client
 var serverMessage[NoOfClients]; // serverMessage[clientID] = server message (Ms) corresponding to clientID
 var clientMessage[NoOfClients]; // clientMessage[clientID] = client message (Mc) corresponding to clientID
@@ -24,21 +28,70 @@ var clientMessage[NoOfClients]; // clientMessage[clientID] = client message (Mc)
 channel network 0;
 
 var test = -2;
+var randomServerMsg = 1234;
+var randomServerKey = 34567;
+var randomClientKey = 191919;
+var PremasterClientKey = 23232323;
+var PremasterServerKey = 1231231232;
+
+
+var debug;
+var ServerCertificate;
+var ServerCertificateSignature;
+
+
 
 // Client processes
 Client(clientID) =
 	GenerateP{p[clientID] = clientID} ->
 	GenerateG{g[clientID] = clientID} ->
+	network!clientID.clientID ->
 	network!clientID.p[clientID] ->
 	network!clientID.g[clientID] ->
-	network?clientID.y{test = y} ->
+	network?clientID.cipherVal ->
+	network?clientID.serverMsg{test = serverMsg} ->
+	ClientReceiveCert(clientID,serverMsg);
+	
+ClientReceiveCert(clientID,serverMsg) = 
+	network?clientID.serverCert ->
+	network?clientID.serverCertSignature ->
+	ClientGeneratePreMaseter(clientID,serverMsg);
+
+ClientGeneratePreMaseter(clientID,serverMsg) =
+	GenerateClientRandomKey{clientRandomKey[clientID] = randomClientKey } ->
+	GeneratePreMasterKey{clientPreMasterKey[clientID] = PremasterClientKey } -> 
+	network!clientID.clientRandomKey[clientID] -> 
+	ClientConnected ->
 	Skip;
 	
+	
 Server() =
-	network?clientID.clientP ->
-	network?clientID.clientQ ->
-	network!clientID.clientP ->
-	Skip;
+	network?x.clientID ->
+	network?x.clientP ->
+	network?x.clientG ->
+	GenerateServerRandomKey{serverRandomKey[clientID] = randomServerKey } ->
+	GenerateServerMessage{serverMessage[clientID] = randomServerMsg} ->  // modify local version of server Message
+	ServerHello(x,clientID);
+	
+ServerHello(x,clientID) =
+	network!x.cipherSuite ->
+	network!x.serverMessage[clientID] -> 
+	ServerSendCert(x,clientID);
+	
+ServerSendCert(x,clientID) = 
+	network!x.ServerCertificate ->
+	network!x.ServerCertificateSignature ->
+	ServerGeneratePreMaster(x,clientID);
+	
+ServerGeneratePreMaster(x,clientID) = 
+	network?x.clientMessageReceived -> 
+	GeneratePreMasterKey{serverPreMasterKey[clientID] = PremasterServerKey;debug = clientMessageReceived} ->
+	ServerConnected -> 
+	Stop;
+	
+
+
+	
 
 TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server();
 
