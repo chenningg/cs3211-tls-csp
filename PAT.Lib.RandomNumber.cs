@@ -6,12 +6,12 @@ namespace PAT.Lib
 {
     public class RandomNumber
     {
-	       public static int randomNumber()
+	    public static int randomNumber(int lowerBound, int upperBound)
         {
-        		Random rd = new Random();
-        		
-        		int rand_num = rd.Next(100,300);
-		        return rand_num;
+            Random rd = new Random();
+            
+            int randNum = rd.Next(lowerBound, upperBound);
+            return randNum;
         }
     }
 }
