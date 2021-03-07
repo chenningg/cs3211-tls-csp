@@ -23,8 +23,8 @@ var serverRandomKey = [123, 234, 456]; // serverRandomKey[clientID] = server ran
 var clientRandomKey = [100, 101, 102]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
 
 // Define premaster keys of server and client
-var serverPreMasterKey[NoOfClients]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
-var clientPreMasterKey[NoOfClients]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
+var serverPreMasterKey[NoOfClients] = [1]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
+var clientPreMasterKey[NoOfClients] = [2]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
 
 // Define messages sent by server and client
 var serverMessage[NoOfClients]; // serverMessage[clientID] = server message (Ms) corresponding to clientID
@@ -104,9 +104,9 @@ ServerConnected(clientID) =
 	ServerConnectedTo{serverConnectedTo[clientID] = 1} ->
 	Skip;
 
-#define sameClientServerKeyGoal PremasterClientKey == PremasterServerKey;
+#define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0]; // TODO how to loop over an assertion to have multiple client / server
  
 TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server();
 
 #assert TLS() deadlockfree;
-#assert TLS() reaches sameClientServerKeyGoal;
+#assert TLS() reaches sameClientServerKeyGoal; // TODO how to check assertion at the end
