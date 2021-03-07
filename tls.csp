@@ -1,4 +1,6 @@
-﻿enum{
+﻿//# include "Random";
+
+enum{
 	DHE,
 	Hello
 };
@@ -43,8 +45,8 @@ var ServerCertificateSignature;
 
 // Client processes
 Client(clientID) =
-	GenerateP{p[clientID] = clientID} ->
-	GenerateG{g[clientID] = clientID} ->
+	GenerateP{p[clientID] = clientID} -> // TODO: Change this
+	GenerateG{g[clientID] = clientID} -> // TODO: CHange this
 	network!clientID.clientID ->
 	network!clientID.p[clientID] ->
 	network!clientID.g[clientID] ->
@@ -58,8 +60,8 @@ ClientReceiveCert(clientID,serverMsg) =
 	ClientGeneratePreMaseter(clientID,serverMsg);
 
 ClientGeneratePreMaseter(clientID,serverMsg) =
-	GenerateClientRandomKey{clientRandomKey[clientID] = randomClientKey } ->
-	GeneratePreMasterKey{clientPreMasterKey[clientID] = PremasterClientKey } -> 
+	GenerateClientRandomKey{clientRandomKey[clientID] = randomClientKey } -> // TODO: Generate random key
+	GeneratePreMasterKey{clientPreMasterKey[clientID] = PremasterClientKey } ->  // TODO: Compute premaster key based on serverMsg
 	network!clientID.clientRandomKey[clientID] -> 
 	ClientConnected ->
 	Skip;
@@ -69,8 +71,8 @@ Server() =
 	network?x.clientID ->
 	network?x.clientP ->
 	network?x.clientG ->
-	GenerateServerRandomKey{serverRandomKey[clientID] = randomServerKey } ->
-	GenerateServerMessage{serverMessage[clientID] = randomServerMsg} ->  // modify local version of server Message
+	GenerateServerRandomKey{serverRandomKey[clientID] = randomServerKey } -> // TODO: Generate random server key
+	GenerateServerMessage{serverMessage[clientID] = randomServerMsg} ->  // TODO: Compute  server message based on random key
 	ServerHello(x,clientID);
 	
 ServerHello(x,clientID) =
@@ -85,7 +87,7 @@ ServerSendCert(x,clientID) =
 	
 ServerGeneratePreMaster(x,clientID) = 
 	network?x.clientMessageReceived -> 
-	GeneratePreMasterKey{serverPreMasterKey[clientID] = PremasterServerKey;debug = clientMessageReceived} ->
+	GeneratePreMasterKey{serverPreMasterKey[clientID] = PremasterServerKey;debug = clientMessageReceived} -> // TODO: Compute server premasterkey based on clientMessageReceived
 	ServerConnected -> 
 	Stop;
 	
