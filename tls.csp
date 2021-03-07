@@ -95,6 +95,9 @@ ServerGeneratePreMaster(x,clientID) =
 
 	
 
+#define sameClientServerKeyGoal PremasterClientKey == PremasterServerKey;
+ 
 TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server();
 
 #assert TLS() deadlockfree;
+#assert TLS() reaches sameClientServerKeyGoal;
