@@ -31,12 +31,14 @@ var attackerRandomKey[NoOfClients];
 // Define premaster keys of server and client
 var serverPreMasterKey[NoOfClients] = [1]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
 var clientPreMasterKey[NoOfClients] = [2]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
-var attackerPreMasterKey[NoOfClients];
+var attackerWithPrivateKeyPreMasterKey[NoOfClients];
+var attackerWithRandomKeyPreMasterKey[NoOfClients];
 
 // Define messages sent by server and client
 var serverMessage[NoOfClients]; // serverMessage[clientID] = server message (Ms) corresponding to clientID
 var clientMessage[NoOfClients]; // clientMessage[clientID] = client message (Mc) corresponding to clientID
 var attackerGuessClientMessage[NoOfClients];
+var attackerWithRandomKeyGuessClientMessage[NoOfClients];
 
 // Track clients connected to the server
 var clientConnectedTo[NoOfClients];
@@ -45,6 +47,7 @@ var serverConnectedTo[NoOfClients];
 // Global state for pub and priv keys
 var clientPublicKey[NoOfClients];
 var clientPrivateKey[NoOfClients];
+var attackerPrivateKey[2];
 var serverPublicKey = 9012003; // server only needs 1 key pair
 var serverPrivateKey = [3001, 3003];
 
@@ -81,16 +84,22 @@ ClientGeneratePreMaster(clientID) =
 	network!clientID.clientMessage[clientID] -> // Send client message to server
 	Skip;
 		
+// =====================================
+// Attacker processes
+// ===================================== 
+	
 // Atacker knows the private key, but does not know the random key	
 AttackPrivateKey(clientID) =
 	GenerateAttackerRandomKey{attackerRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} ->
 	network?clientID.clientMsg{attackerGuessClientMessage[clientID] = call(decrypt, clientMsg, serverPrivateKey[0] * serverPrivateKey[1])} ->
-	GenerateAttackerPMK{attackerPreMasterKey[clientID] = call(Pow, attackerGuessClientMessage[clientID], attackerRandomKey[clientID]) % p[clientID] } ->
+	GenerateAttackerPMK{attackerWithPrivateKeyPreMasterKey[clientID] = call(Pow, attackerGuessClientMessage[clientID], attackerRandomKey[clientID]) % p[clientID] } ->
 	Skip;
 
-// TODO(anth)
 // Attacker does not know the private key, but knows the random key
 AttackRandomKey(clientID) =
+	GenerateAttackerPrivateKey{attackerPrivateKey[0] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound);attackerPrivateKey[1] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} ->
+	network?clientID.clientMsg{attackerWithRandomKeyGuessClientMessage[clientID] = call(decrypt, clientMsg, attackerPrivateKey[0] * attackerPrivateKey[1])} ->
+	GenerateAttackerPMK{attackerWithRandomKeyPreMasterKey[clientID] = call(Pow, attackerWithRandomKeyGuessClientMessage[clientID], serverRandomKey[clientID]) % p[clientID] } ->
 	Skip;
 	
 // =====================================
@@ -128,10 +137,13 @@ ServerConnected(clientID) =
 	Skip;
 
 #define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0]; 
-#define attackerNotGuessPMK attackerPreMasterKey[0] != clientPreMasterKey[0];
+#define attackerWithPrivateKeyNotGuessPMK attackerWithPrivateKeyPreMasterKey[0] != clientPreMasterKey[0];
+#define attackerWithRandomKeyNotGuessPMK attackerWithRandomKeyPreMasterKey[0] != clientPreMasterKey[0];
  
 TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server() ||| AttackRandomKey(0) ||| AttackPrivateKey(0); 
 
 #assert TLS() deadlockfree;
 #assert TLS() reaches sameClientServerKeyGoal; // TODO how to check assertion at the end
-#assert TLS() reaches attackerNotGuessPMK;
+#assert TLS() reaches attackerWithPrivateKeyNotGuessPMK;
+#assert TLS() reaches attackerWithRandomKeyNotGuessPMK;
+
