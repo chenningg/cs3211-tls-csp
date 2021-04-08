@@ -13,6 +13,8 @@ enum{
 #define NoOfClients 1;
 #define randomKeyLowerBound 3;
 #define randomKeyUpperBound 10;
+#define attackerRandomKeyLowerBound 4000;
+#define attackerRandomKeyUpperBound 5000;
 
 // Define ciper suite (we only use DHE)
 var cipherSuite = DHE;
@@ -97,7 +99,8 @@ AttackPrivateKey(clientID) =
 
 // Attacker does not know the private key, but knows the random key
 AttackRandomKey(clientID) =
-	GenerateAttackerPrivateKey{attackerPrivateKey[0] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound);attackerPrivateKey[1] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} ->
+	GenerateAttackerPrivateKey{attackerPrivateKey[0] = call(randomNumber, attackerRandomKeyLowerBound, attackerRandomKeyUpperBound);
+	attackerPrivateKey[1] = call(randomNumber, attackerRandomKeyLowerBound, attackerRandomKeyUpperBound)} ->
 	network?clientID.clientMsg{attackerWithRandomKeyGuessClientMessage[clientID] = call(decrypt, clientMsg, attackerPrivateKey[0] * attackerPrivateKey[1])} ->
 	GenerateAttackerPMK{attackerWithRandomKeyPreMasterKey[clientID] = call(Pow, attackerWithRandomKeyGuessClientMessage[clientID], serverRandomKey[clientID]) % p[clientID] } ->
 	Skip;
@@ -137,8 +140,8 @@ ServerConnected(clientID) =
 	Skip;
 
 #define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0]; 
-#define attackerWithPrivateKeyNotGuessPMK attackerWithPrivateKeyPreMasterKey[0] == clientPreMasterKey[0];
-#define attackerWithRandomKeyNotGuessPMK attackerWithRandomKeyPreMasterKey[0] == clientPreMasterKey[0];
+#define attackerWithPrivateKeyNotGuessPMK attackerWithPrivateKeyPreMasterKey[0] != clientPreMasterKey[0];
+#define attackerWithRandomKeyNotGuessPMK attackerWithRandomKeyPreMasterKey[0] != clientPreMasterKey[0];
  
 TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server() ||| AttackRandomKey(0) ||| AttackPrivateKey(0); 
 
