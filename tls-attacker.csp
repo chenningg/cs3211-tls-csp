@@ -31,8 +31,8 @@ var attackerRandomKey[NoOfClients];
 // Define premaster keys of server and client
 var serverPreMasterKey[NoOfClients] = [1]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
 var clientPreMasterKey[NoOfClients] = [2]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
-var attackerWithPrivateKeyPreMasterKey[NoOfClients];
-var attackerWithRandomKeyPreMasterKey[NoOfClients];
+var attackerWithPrivateKeyPreMasterKey[NoOfClients] = [3];
+var attackerWithRandomKeyPreMasterKey[NoOfClients] = [3];
 
 // Define messages sent by server and client
 var serverMessage[NoOfClients]; // serverMessage[clientID] = server message (Ms) corresponding to clientID
@@ -137,8 +137,8 @@ ServerConnected(clientID) =
 	Skip;
 
 #define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0]; 
-#define attackerWithPrivateKeyNotGuessPMK attackerWithPrivateKeyPreMasterKey[0] != clientPreMasterKey[0];
-#define attackerWithRandomKeyNotGuessPMK attackerWithRandomKeyPreMasterKey[0] != clientPreMasterKey[0];
+#define attackerWithPrivateKeyNotGuessPMK attackerWithPrivateKeyPreMasterKey[0] == clientPreMasterKey[0];
+#define attackerWithRandomKeyNotGuessPMK attackerWithRandomKeyPreMasterKey[0] == clientPreMasterKey[0];
  
 TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server() ||| AttackRandomKey(0) ||| AttackPrivateKey(0); 
 
