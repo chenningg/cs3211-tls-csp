@@ -34,7 +34,7 @@ var attackerRandomKey[NoOfClients];
 // Define premaster keys of server and client
 var serverPreMasterKey[NoOfClients] = [1]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
 var clientPreMasterKey[NoOfClients] = [2]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
-var attackerPreMasterKey[NoOfClients];
+var attackerPreMasterKey[NoOfClients] = [2];
 
 // Define messages sent by server and client
 var serverMessage[NoOfClients]; // serverMessage[clientID] = server message (Ms) corresponding to clientID
@@ -53,6 +53,8 @@ var serverPrivateKey = [3001, 3003];
 
 channel network 0; // 0 buffer = synchronous
 
+// Number of iterations of the server loop, we use this to track which iteration the random key is at
+var loop = 0;
 var test = -2;
 
 // var debug;
@@ -86,19 +88,11 @@ ClientGeneratePreMaster(clientID) =
 	
 
 Attacker(clientID) =
-	AttackPrivateKey(clientID);
-	
-// Atacker knows the private key, but does not know the random key	
-AttackPrivateKey(clientID) =
-	GenerateAttackerRandomKey{attackerRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} ->
+	GenerateAttackerRandomKey{attackerRandomKey[clientID] = serverRandomKey[clientID]} ->
 	network?clientID.clientMsg{attackerGuessClientMessage[clientID] = call(decrypt, clientMsg, serverPrivateKey[0] * serverPrivateKey[1])} ->
 	GenerateAttackerPMK{attackerPreMasterKey[clientID] = call(Pow, attackerGuessClientMessage[clientID], attackerRandomKey[clientID]) % p[clientID] } ->
-	AttackRandomKey(clientID);
-
-// TODO(anth)
-// Attacker does not know the private key, but knows the random key
-AttackRandomKey(clientID) =
 	Skip;
+
 	
 // =====================================
 // Server processes
@@ -132,8 +126,7 @@ ServerGeneratePreMaster(client, clientID) =
 // Update server connection
 ServerConnected(clientID) =
 	ServerConnectedTo{serverConnectedTo[clientID] = 1} ->
-//	Server();
-	Skip;
+	Server();
 
 #define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0]; 
 #define attackerNotGuessPMK attackerPreMasterKey[0] != clientPreMasterKey[0];

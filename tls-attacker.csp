@@ -31,7 +31,7 @@ var attackerRandomKey[NoOfClients];
 // Define premaster keys of server and client
 var serverPreMasterKey[NoOfClients] = [1]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
 var clientPreMasterKey[NoOfClients] = [2]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
-var attackerPreMasterKey[NoOfClients];
+var attackerPreMasterKey[NoOfClients] = [2];
 
 // Define messages sent by server and client
 var serverMessage[NoOfClients]; // serverMessage[clientID] = server message (Ms) corresponding to clientID
