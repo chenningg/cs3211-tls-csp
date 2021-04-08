@@ -81,11 +81,20 @@ ClientGeneratePreMaster(clientID) =
 	network!clientID.clientMessage[clientID] -> // Send client message to server
 	Skip;
 	
-	
+
 Attacker(clientID) =
+	AttackPrivateKey(clientID);
+	
+// Atacker knows the private key, but does not know the random key	
+AttackPrivateKey(clientID) =
 	GenerateAttackerRandomKey{attackerRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} ->
 	network?clientID.clientMsg{attackerGuessClientMessage[clientID] = call(decrypt, clientMsg, serverPrivateKey[0] * serverPrivateKey[1])} ->
 	GenerateAttackerPMK{attackerPreMasterKey[clientID] = call(Pow, attackerGuessClientMessage[clientID], attackerRandomKey[clientID]) % p[clientID] } ->
+	AttackRandomKey(clientID);
+
+// TODO(anth)
+// Attacker does not know the private key, but knows the random key
+AttackRandomKey(clientID) =
 	Skip;
 	
 // =====================================
