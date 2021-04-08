@@ -5,7 +5,8 @@ enum{
 	Hello
 };
 
-
+// channel?x : x go in to channel
+// channel!x : x go out of channel
 // Define number of clients
 #define NoOfClients 1;
 
@@ -34,19 +35,23 @@ var clientMessage[NoOfClients]; // clientMessage[clientID] = client message (Mc)
 var clientConnectedTo[NoOfClients];
 var serverConnectedTo[NoOfClients];
 
+// Global state for pub and priv keys
+var clientPublicKey[NoOfClients];
+var clientPrivateKey[NoOfClients];
+var serverPublicKey; // server only needs 1 key pair
+var serverPrivateKey;
+
 channel network 0;
 
-var test = -2;
+// var test = -2;
 
-var debug;
-var ServerCertificate;
-var ServerCertificateSignature;
-
-
+// var debug;
+// var ServerCertificate;
+// var ServerCertificateSignature;
 
 // =====================================
 // Client processes
-// =====================================
+// ===================================== 
 Client(clientID) =
 	GenerateP{p[clientID] = p[clientID]} -> // TODO: Generate random p
 	GenerateG{g[clientID] = g[clientID]} -> // TODO: Generate random g
@@ -104,7 +109,8 @@ ServerConnected(clientID) =
 	ServerConnectedTo{serverConnectedTo[clientID] = 1} ->
 	Skip;
 
-#define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0]; // TODO how to loop over an assertion to have multiple client / server
+// TODO: how to compare all entries in array (all serverPMK and clientPMK matches)
+#define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0]; 
  
 TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server();
 
