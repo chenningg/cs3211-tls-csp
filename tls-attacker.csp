@@ -1,0 +1,133 @@
+﻿#import "PAT.Lib.RandomNumber";
+#import "PAT.Lib.Crypt";
+#import "PAT.Math";
+
+enum{
+	DHE,
+	Hello
+};
+
+// channel?x : x go out of channel
+// channel!x : x go in to channel
+// Define number of clients
+#define NoOfClients 1;
+#define randomKeyLowerBound 3;
+#define randomKeyUpperBound 10;
+
+// Define ciper suite (we only use DHE)
+var cipherSuite = DHE;
+
+// TODO: Currently we hardcode to have 3 clients supported
+
+// Define p and g variables for all clients
+var p = [9, 11, 13]; // p[clientID] = p value of client with clientID
+var g = [2, 3, 4]; // g[clientID] = g value of client with clientID
+
+// Define random keys of server and client
+var serverRandomKey[NoOfClients]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
+var clientRandomKey[NoOfClients]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
+var attackerRandomKey[NoOfClients];
+
+// Define premaster keys of server and client
+var serverPreMasterKey[NoOfClients] = [1]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
+var clientPreMasterKey[NoOfClients] = [2]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
+var attackerPreMasterKey[NoOfClients];
+
+// Define messages sent by server and client
+var serverMessage[NoOfClients]; // serverMessage[clientID] = server message (Ms) corresponding to clientID
+var clientMessage[NoOfClients]; // clientMessage[clientID] = client message (Mc) corresponding to clientID
+var attackerGuessClientMessage[NoOfClients];
+
+// Track clients connected to the server
+var clientConnectedTo[NoOfClients];
+var serverConnectedTo[NoOfClients];
+
+// Global state for pub and priv keys
+var clientPublicKey[NoOfClients];
+var clientPrivateKey[NoOfClients];
+var serverPublicKey = 9012003; // server only needs 1 key pair
+var serverPrivateKey = [3001, 3003];
+
+channel network 0; // 0 buffer = synchronous
+
+var test = -2;
+
+// var debug;
+var ServerCertificate;
+var ServerCertificateSignature;
+
+// =====================================
+// Client processes
+// ===================================== 
+Client(clientID) =
+	GenerateP{p[clientID] = p[clientID]} ->
+	GenerateG{g[clientID] = g[clientID]} -> 
+	network!clientID.clientID -> // Send clientID, p and g to server
+	network!clientID.p[clientID] ->
+	network!clientID.g[clientID] ->
+	ClientReceiveServerHello(clientID);
+	
+// Get server certificate for verification
+ClientReceiveServerHello(clientID) = 
+	network?clientID.cipherVal -> // Get cipherval from server
+	network?clientID.serverMsg{serverMessage[clientID] = serverMsg} -> // Recieve encrypted server msg
+	network?clientID.serverCert{serverMessage[clientID] = call(decrypt, serverMessage[clientID], serverCert)} ->
+	ClientGeneratePreMaster(clientID);
+
+ClientGeneratePreMaster(clientID) =
+	GenerateClientRandomKey{clientRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} ->
+	GenerateClientPreMasterKey{clientPreMasterKey[clientID] = call(Pow, serverMessage[clientID], clientRandomKey[clientID]) % p[clientID] } -> // Compute client premaster key
+	GenerateClientMessage{clientMessage[clientID] = call(Pow, g[clientID], clientRandomKey[clientID]) % p[clientID] } -> // Compute client message to send to the server
+	network!clientID.clientMessage[clientID] -> // Send client message to server
+	Skip;
+	
+	
+Attacker(clientID) =
+	GenerateAttackerRandomKey{attackerRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} ->
+	network?clientID.clientMsg{attackerGuessClientMessage[clientID] = call(decrypt, clientMsg, serverPrivateKey)} ->
+	GenerateAttackerPMK{attackerPreMasterKey[clientID] = call(Pow, attackerGuessClientMessage[clientID], attackerRandomKey[clientID]) % p[clientID] } ->
+	Skip;
+	
+// =====================================
+// Server processes
+// =====================================
+Server() =
+	network?client.clientID -> // Receive clientID, p and g from client
+	network?client.P ->
+	network?client.G ->
+	GenerateServerRandomKey{serverRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound) } ->
+	GenerateServerMessage{serverMessage[clientID] = call(Pow, G, serverRandomKey[clientID]) % P} ->  // TODO: How to store?
+	ServerHello(client, clientID);
+	
+// Send server hello back to client
+ServerHello(client, clientID) =
+	network!client.cipherSuite -> // Send cipher suite chosen (DHE)
+	EncryptServerMessage{serverMessage[clientID] = call(encrypt, serverMessage[clientID], serverPrivateKey) } -> 
+	network!client.serverMessage[clientID] -> // Send server message to client
+	ServerSendCert(client, clientID);
+
+// Send server pub key to verify itself to the client	
+ServerSendCert(client, clientID) = 
+	network!client.serverPublicKey ->  
+	ServerGeneratePreMaster(client, clientID);
+	
+// Generate server's premaster key
+ServerGeneratePreMaster(client, clientID) = 
+	network?client.clientMessageReceived -> // Read client's message from client
+	GenerateServerPreMasterKey{serverPreMasterKey[clientID] = call(Pow, clientMessageReceived, serverRandomKey[clientID]) % p[clientID]} ->
+	ServerConnected(clientID);
+	
+// Update server connection
+ServerConnected(clientID) =
+	ServerConnectedTo{serverConnectedTo[clientID] = 1} ->
+	Skip;
+
+// TODO: how to compare all entries in array (all serverPMK and clientPMK matches)
+#define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0]; 
+#define attackerNotGuessPMK attackerPreMasterKey[0] != clientPreMasterKey[0];
+ 
+TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server(); 
+
+#assert TLS() deadlockfree;
+#assert TLS() reaches sameClientServerKeyGoal; // TODO how to check assertion at the end
+#assert TLS() reaches attackerNotGuessPMK;
