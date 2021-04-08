@@ -80,17 +80,13 @@ ClientGeneratePreMaster(clientID) =
 	GenerateClientMessage{clientMessage[clientID] = call(Pow, g[clientID], clientRandomKey[clientID]) % p[clientID] } -> // Compute client message to send to the server
 	network!clientID.clientMessage[clientID] -> // Send client message to server
 	Skip;
-	
-
-Attacker(clientID) =
-	AttackPrivateKey(clientID);
-	
+		
 // Atacker knows the private key, but does not know the random key	
 AttackPrivateKey(clientID) =
 	GenerateAttackerRandomKey{attackerRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} ->
 	network?clientID.clientMsg{attackerGuessClientMessage[clientID] = call(decrypt, clientMsg, serverPrivateKey[0] * serverPrivateKey[1])} ->
 	GenerateAttackerPMK{attackerPreMasterKey[clientID] = call(Pow, attackerGuessClientMessage[clientID], attackerRandomKey[clientID]) % p[clientID] } ->
-	AttackRandomKey(clientID);
+	Skip;
 
 // TODO(anth)
 // Attacker does not know the private key, but knows the random key
@@ -131,11 +127,10 @@ ServerConnected(clientID) =
 	ServerConnectedTo{serverConnectedTo[clientID] = 1} ->
 	Skip;
 
-// TODO: how to compare all entries in array (all serverPMK and clientPMK matches)
 #define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0]; 
 #define attackerNotGuessPMK attackerPreMasterKey[0] != clientPreMasterKey[0];
  
-TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server() ||| Attacker(0); 
+TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server() ||| AttackRandomKey(0) ||| AttackPrivateKey(0); 
 
 #assert TLS() deadlockfree;
 #assert TLS() reaches sameClientServerKeyGoal; // TODO how to check assertion at the end

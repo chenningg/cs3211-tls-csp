@@ -132,9 +132,9 @@ ServerGeneratePreMaster(client, clientID) =
 // Update server connection
 ServerConnected(clientID) =
 	ServerConnectedTo{serverConnectedTo[clientID] = 1} ->
+//	Server();
 	Skip;
 
-// TODO: how to compare all entries in array (all serverPMK and clientPMK matches)
 #define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0]; 
 #define attackerNotGuessPMK attackerPreMasterKey[0] != clientPreMasterKey[0];
 // #define round == 2 && attackerPreMasterKey[0] != clientPreMasterKey[0];
