@@ -81,7 +81,7 @@ ClientGeneratePreMaster(clientID) =
 // =====================================
 // Server processes
 // =====================================
-Server(clientID) =
+Server() =
 	network?client.clientID -> // Receive clientID, p and g from client
 	network?client.P ->
 	network?client.G ->
@@ -115,7 +115,7 @@ ServerConnected(clientID) =
 // TODO: how to compare all entries in array (all serverPMK and clientPMK matches)
 #define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0]; 
  
-TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server(0); 
+TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server(); 
 
 #assert TLS() deadlockfree;
 #assert TLS() reaches sameClientServerKeyGoal; // TODO how to check assertion at the end
