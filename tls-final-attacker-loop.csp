@@ -303,7 +303,7 @@ AttackerKnowsEverything5() = (||| clientID:{0..NoOfClients-1} @ Client(globalLoo
 
 // Check for perfect forward secrecy
 #define sameLoop serverLoop == clientLoop == attackerLoop; // Ensure all are on the same loop
-#define perfectForwardSecrecy !attackerSamePreMasterKeyAsServerClient && attackerLoop < clientLoop && attackerLoop < serverLoop;
+#define perfectForwardSecrecyBroken attackerSamePreMasterKeyAsServerClient && attackerLoop < clientLoop && attackerLoop < serverLoop;
 
 
 // =====================================
@@ -315,7 +315,7 @@ AttackerKnowsEverything5() = (||| clientID:{0..NoOfClients-1} @ Client(globalLoo
 #assert TLS() reaches sameClientServerKeyGoal; // Check that generated premaster keys are the same
 #assert TLS() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
 #assert TLS() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
-#assert TLS() reaches perfectForwardSecrecy; // Check for perfect forward secrecy
+#assert TLS() reaches perfectForwardSecrecyBroken; // Check for perfect forward secrecy
 
 // 1. Attacker doesn't know any random or private keys but can snoop on the network connection
 #assert AttackerNetworkSnoopOnly1() deadlockfree; // Check for deadlock free
@@ -323,7 +323,7 @@ AttackerKnowsEverything5() = (||| clientID:{0..NoOfClients-1} @ Client(globalLoo
 #assert AttackerNetworkSnoopOnly1() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
 #assert AttackerNetworkSnoopOnly1() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
 #assert AttackerNetworkSnoopOnly1() reaches attackerSamePreMasterKeyAsServerClient; // Check if attacker manages to generate same preMasterKey as server and client
-#assert AttackerNetworkSnoopOnly1() reaches perfectForwardSecrecy; // Check for perfect forward secrecy
+#assert AttackerNetworkSnoopOnly1() reaches perfectForwardSecrecyBroken; // Check for perfect forward secrecy
 
 // 2. Attacker knows the server's private keys only AND can snoop on the network connection. Attacker doesn't know the random keys.
 #assert AttackerKnowsServerPrivateKey2() deadlockfree; // Check for deadlock free
@@ -331,7 +331,7 @@ AttackerKnowsEverything5() = (||| clientID:{0..NoOfClients-1} @ Client(globalLoo
 #assert AttackerKnowsServerPrivateKey2() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
 #assert AttackerKnowsServerPrivateKey2() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
 #assert AttackerKnowsServerPrivateKey2() reaches attackerSamePreMasterKeyAsServerClient; // Check if attacker manages to generate same preMasterKey as server and client
-#assert AttackerKnowsServerPrivateKey2() reaches perfectForwardSecrecy; // Check for perfect forward secrecy
+#assert AttackerKnowsServerPrivateKey2() reaches perfectForwardSecrecyBroken; // Check for perfect forward secrecy
 
 // 3. Attacker knows the random keys (of client only) but doesn't know server's private key, but can snoop on the network connection
 #assert AttackerKnowsClientRandomKeyOnly3() deadlockfree; // Check for deadlock free
@@ -339,7 +339,7 @@ AttackerKnowsEverything5() = (||| clientID:{0..NoOfClients-1} @ Client(globalLoo
 #assert AttackerKnowsClientRandomKeyOnly3() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
 #assert AttackerKnowsClientRandomKeyOnly3() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
 #assert AttackerKnowsClientRandomKeyOnly3() reaches attackerSamePreMasterKeyAsServerClient; // Check if attacker manages to generate same preMasterKey as server and client
-#assert AttackerKnowsClientRandomKeyOnly3() reaches perfectForwardSecrecy; // Check for perfect forward secrecy
+#assert AttackerKnowsClientRandomKeyOnly3() reaches perfectForwardSecrecyBroken; // Check for perfect forward secrecy
 
 // 4. Attacker knows the random keys (of server only) but doesn't know server's private key, but can snoop on the network connection
 #assert AttackerKnowsServerRandomKeyOnly4() deadlockfree; // Check for deadlock free
@@ -347,7 +347,7 @@ AttackerKnowsEverything5() = (||| clientID:{0..NoOfClients-1} @ Client(globalLoo
 #assert AttackerKnowsServerRandomKeyOnly4() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
 #assert AttackerKnowsServerRandomKeyOnly4() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
 #assert AttackerKnowsServerRandomKeyOnly4() reaches attackerSamePreMasterKeyAsServerClient; // Check if attacker manages to generate same preMasterKey as server and client
-#assert AttackerKnowsServerRandomKeyOnly4() reaches perfectForwardSecrecy; // Check for perfect forward secrecy
+#assert AttackerKnowsServerRandomKeyOnly4() reaches perfectForwardSecrecyBroken; // Check for perfect forward secrecy
 
 // 5. Attacker knows the random keys (of both client and server), knows the server's private key, and can snoop on the network connection.
 #assert AttackerKnowsEverything5() deadlockfree; // Check for deadlock free
@@ -355,4 +355,4 @@ AttackerKnowsEverything5() = (||| clientID:{0..NoOfClients-1} @ Client(globalLoo
 #assert AttackerKnowsEverything5() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
 #assert AttackerKnowsEverything5() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
 #assert AttackerKnowsEverything5() reaches attackerSamePreMasterKeyAsServerClient; // Check if attacker manages to generate same preMasterKey as server and client
-#assert AttackerKnowsEverything5() reaches perfectForwardSecrecy; // Check for perfect forward secrecy
+#assert AttackerKnowsEverything5() reaches perfectForwardSecrecyBroken; // Check for perfect forward secrecy
