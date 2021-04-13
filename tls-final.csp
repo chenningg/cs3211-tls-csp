@@ -1,0 +1,281 @@
+﻿#import "PAT.Lib.RandomNumber";
+#import "PAT.Lib.SCrypt";
+#import "PAT.Math";
+
+enum{
+	DHE
+};
+
+// channel?x : x go out of channel
+// channel!x : x go in to channel
+// Define number of clients
+#define NoOfClients 1;
+#define randomKeyLowerBound 3;
+#define randomKeyUpperBound 10;
+
+// Define ciper suite (we only use DHE)
+var cipherSuite = DHE;
+
+// TODO: Currently we hardcode to have 3 clients supported
+
+// Define p and g variables for all clients
+var p = [5]; // p[clientID] = p value of client with clientID, p is a prime number
+var g = [3]; // g[clientID] = g value of client with clientID, g is a primitive root modulo of p
+
+// Define random keys of server and client
+var serverRandomKey[NoOfClients]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
+var clientRandomKey[NoOfClients]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
+
+// Define premaster keys of server and client
+var serverPreMasterKey[NoOfClients]; // serverRandomKey[clientID] = server random key (KS) corresponding to clientID
+var clientPreMasterKey[NoOfClients]; // clientRandomKey[clientID] = client random key (KC) corresponding to clientID
+
+// Define messages sent by server and client
+var serverMessage[NoOfClients]; // serverMessage[clientID] = server message (Ms) corresponding to clientID
+var clientMessage[NoOfClients]; // clientMessage[clientID] = client message (Mc) corresponding to clientID
+
+// Track clients connected to the server
+var clientConnectedTo[NoOfClients];
+var serverConnectedTo[NoOfClients];
+
+// Store server certs
+var serverPublicKeys[NoOfClients];
+
+// Store messages sent between client and server
+var clientMessagesToSend[NoOfClients] = [24]; // Stores unencrypted messages
+var clientMessagesSent[NoOfClients]; // Stores encrypted messages with premaster key
+var clientMessagesReceived[NoOfClients]; // Stores decrypted messages received from server
+var serverMessagesToSend[NoOfClients] = [42]; // Stores unencrypted messages
+var serverMessagesSent[NoOfClients]; // Stores encrypted messages with premaster key
+var serverMessagesReceived[NoOfClients]; // Stores decrypted messages received from client
+
+// Global state for pub and priv keys (client doesn't have as it's unauthenticated/anonymous)
+//var clientPublicKey[NoOfClients];
+//var clientPrivateKey[NoOfClients];
+var serverPublicKey = 3003; // server only needs 1 key pair
+var serverPrivateKey = 3003;
+
+// Attacker variables (Attacker always knows P and G since they are sent unencrypted over the network)
+var attackerRandomKey[NoOfClients]; // Attacker will generate random keys if it doesn't know any
+var attackerClientMessage[NoOfClients]; // Attacker can unencrypt clientMessage hashed with server's public key if it has server's private key
+var attackerClientRandomKey[NoOfClients];
+var attackerServerRandomKey[NoOfClients];
+var attackerPreMasterKey[NoOfClients];
+
+channel network 0; // 0 buffer = synchronous
+
+
+// =====================================
+// Client processes
+// ===================================== 
+Client(clientID) =
+	GenerateP{p[clientID] = p[clientID]} ->
+	GenerateG{g[clientID] = g[clientID]} -> 
+	network!clientID.clientID -> // Send clientID, p and g to server
+	network!clientID.p[clientID] ->
+	network!clientID.g[clientID] ->
+	ClientReceiveServerHello(clientID);
+	
+// Get server certificate for verification
+ClientReceiveServerHello(clientID) = 
+	network?clientID.cipherVal -> // Get cipherval from server
+	network?clientID.serverMsg{serverMessage[clientID] = serverMsg} -> // Recieve server msg
+	network?clientID.serverCert{serverPublicKeys[clientID] = serverCert} ->
+	ClientGeneratePreMaster(clientID);
+
+ClientGeneratePreMaster(clientID) =
+	GenerateClientRandomKey{clientRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} ->
+	GenerateClientPreMasterKey{clientPreMasterKey[clientID] = call(Pow, serverMessage[clientID], clientRandomKey[clientID]) % p[clientID] } -> // Compute client premaster key
+	GenerateClientMessage{clientMessage[clientID] = call(Pow, g[clientID], clientRandomKey[clientID]) % p[clientID] } -> // Compute client message to send to the server
+	HashClientMessage{clientMessage[clientID] = call(encrypt, clientMessage[clientID], serverPublicKeys[clientID])} -> // Hash message with server's public key before sending
+	network!clientID.clientMessage[clientID] -> // Send hashed client message to server
+	ClientConnected(clientID);
+	
+// Do a SYN ACK	
+ClientConnected(clientID) =
+	network?clientID.msg1{clientMessagesReceived[clientID] = call(decrypt, msg1, clientPreMasterKey[clientID])} -> // Receive encrypted server message encrypted with premasterkey
+	EncryptClientMessage{clientMessagesSent[clientID] = call(encrypt, clientMessagesToSend[clientID], clientPreMasterKey[clientID])} -> // Encrypt reply using premasterkey and send to server
+	network!clientID.clientMessagesSent[clientID] -> // Send client encrypted message to server
+	Skip();
+	
+	
+// =====================================
+// Attacker processes
+// - An attacker can have various abilities, including snooping on the network to reconstruct messages.
+// - In our case, we explore 3 different scenarios.
+//   1. Attacker doesn't know any random or private keys but can snoop on the network connection
+//   2. Attacker knows the server's private keys only AND can snoop on the network connection
+//   3. Attacker knows the random keys (of client only) but doesn't know server's private key, but can snoop on the network connection
+//   4. Attacker knows the random keys (of server only) but doesn't know server's private key, but can snoop on the network connection
+//      Note: There's no point in knowing both random keys and not knowing server's private key, since it's the same as just using serverMessage (unhashed) to generate PreMasterKey with client's random key.
+//   5. Attacker knows the random keys (of both client and server), knows the server's private key, and can snoop on the network connection.
+// ===================================== 
+
+// 1. Attacker doesn't know any random or private keys but can snoop on the network connection
+// - Attacker will know P, G, ClientMessage (Hashed with server's public key) and ServerMessage
+AttackerNetworkSnoopOnly(clientID) =
+	GenerateAttackerRandomKey{attackerRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} -> // Attacker has to brute force random key
+	// Attacker can't get clientMessage as it is hashed with server's public key. It can only get serverMessage unencrypted.
+	network?clientID.serverMsg{attackerPreMasterKey[clientID] = call(Pow, serverMsg, attackerRandomKey[clientID]) % p[clientID]} -> // Attacker tries to generate same premasterkey as client 
+	Skip;
+
+// 2. Attacker knows the server's private keys only AND can snoop on the network connection. Attacker doesn't know the random keys.
+// - Attacker will know P, G, ClientMessage (Can be decrypted), ServerMessage and ServerPrivateKey
+AttackerKnowsServerPrivateKey(clientID) =
+	GenerateAttackerRandomKey{attackerRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} -> // Attacker has to brute force random key
+	// Attacker can get both ClientMessage (after decryption) and ServerMessage. Here, we try using ClientMessage since we did ServerMessage earlier.
+	network?clientID.clientMsg{attackerClientMessage[clientID] = clientMsg} -> // Receive the hashed clientMessage
+	DecryptClientMessage{attackerClientMessage[clientID] = call(decrypt, attackerClientMessage[clientID], serverPrivateKey)} -> // Decrypt using server's private key
+	GenerateAttackerPreMasterKey{attackerPreMasterKey[clientID] = call(Pow, attackerClientMessage[clientID], attackerRandomKey[clientID]) % p[clientID]} -> // Attacker tries to generate same premasterkey as server 
+	Skip;
+	
+// 3. Attacker knows the random keys (of client only) but doesn't know server's private key, but can snoop on the network connection
+// - Attacker will know P, G, ClientMessage (Hashed with server's public key), ServerMessage and ClientRandomKey
+AttackerKnowsClientRandomKeyOnly(clientID) =
+	// Since we know the client random key, we just try using serverMessage since it's unhashed. We directly use clientRandomKey since we know it.
+	network?clientID.serverMsg{attackerPreMasterKey[clientID] = call(Pow, serverMsg, clientRandomKey[clientID]) % p[clientID]} -> // Attacker tries to generate same premasterkey as client
+	Skip;
+
+// 4. Attacker knows the random keys (of server only) but doesn't know server's private key, but can snoop on the network connection
+// - Attacker will know P, G, ClientMessage (Hashed with server's public key), ServerMessage and ServerRandomKey
+AttackerKnowsServerRandomKeyOnly(clientID) =
+	// We can't do anything even when knowing server's random key since we are unable to get ClientMessage to generate the PreMasterKey (ClientMessage is hashed with ServerPrivateKey).
+	// Therefore, we have to do the same thing as when we know nothing - generate random key and hope to get lucky with the unhashed ServerMessage.
+	GenerateAttackerRandomKey{attackerRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound)} -> // Attacker has to brute force random key
+	// Attacker can't get clientMessage as it is hashed with server's public key. It can only get serverMessage unencrypted.
+	network?clientID.serverMsg{attackerPreMasterKey[clientID] = call(Pow, serverMsg, attackerRandomKey[clientID]) % p[clientID]} -> // Attacker tries to generate same premasterkey as client 
+	Skip;
+	
+// 5. Attacker knows the random keys (of both client and server), knows the server's private key, and can snoop on the network connection.
+// - Attacker will know P, G, ClientMessage (Can be decrypted), ServerMessage, ClientRandomKey and ServerRandomKey
+AttackerKnowsEverything(clientID) =
+	// In this case, attacker is all powerful and so we can try anything. Let's try it with ClientMessage.
+	network?clientID.clientMsg{attackerClientMessage[clientID] = clientMsg} -> // Receive the hashed clientMessage
+	DecryptClientMessage{attackerClientMessage[clientID] = call(decrypt, attackerClientMessage[clientID], serverPrivateKey)} -> // Decrypt using server's private key
+	GenerateAttackerPreMasterKey{attackerPreMasterKey[clientID] = call(Pow, attackerClientMessage[clientID], serverRandomKey[clientID]) % p[clientID]} -> // Attacker tries to generate same premasterkey as server 
+	Skip;
+	
+	
+// =====================================
+// Server processes
+// =====================================
+Server() =
+	network?client.clientID -> // Receive clientID, p and g from client
+	network?client.P ->
+	network?client.G ->
+	GenerateServerRandomKey{serverRandomKey[clientID] = call(randomNumber, randomKeyLowerBound, randomKeyUpperBound) } ->
+	GenerateServerMessage{serverMessage[clientID] = call(Pow, G, serverRandomKey[clientID]) % P} ->
+	ServerHello(client, clientID);
+	
+// Send server hello back to client
+ServerHello(client, clientID) =
+	network!client.cipherSuite -> // Send cipher suite chosen (DHE)
+	// EncryptServerMessage{serverMessage[clientID] = call(encrypt, serverMessage[clientID], serverPrivateKey) } -> 
+	network!client.serverMessage[clientID] -> // Send server message to client
+	ServerSendCert(client, clientID);
+
+// Send server pub key to verify itself to the client	
+ServerSendCert(client, clientID) = 
+	network!client.serverPublicKey -> // Send server cert over
+	ServerGeneratePreMaster(client, clientID);
+	
+// Generate server's premaster key
+ServerGeneratePreMaster(client, clientID) = 
+	network?client.clientMessageReceived ->
+	UnhashClientMessage{clientMessage[clientID] = call(decrypt, clientMessageReceived, serverPrivateKey)} -> // Read hashed client's message from client
+	GenerateServerPreMasterKey{serverPreMasterKey[clientID] = call(Pow, clientMessage[clientID], serverRandomKey[clientID]) % p[clientID]} ->
+	EncryptServerMessage{serverMessagesSent[clientID] = call(encrypt, serverMessagesToSend[clientID], serverPreMasterKey[clientID])} -> // Encrypt message using premasterkey and send to client
+	network!client.serverMessagesSent[clientID] -> // Send server encrypted message to client
+	ServerConnected(client, clientID);
+	
+// Update server connection and send message
+ServerConnected(client, clientID) =
+	network?client.msg2{serverMessagesReceived[clientID] = call(decrypt, msg2, serverPreMasterKey[clientID])} -> // Receive encrypted server message encrypted with premasterkey
+	ServerConnectedTo{serverConnectedTo[clientID] = 1} ->
+	Skip();
+ 
+ 
+// =====================================
+// Simulations
+// =====================================
+// 0. Normal TLS process without any attackers (i.e. client and server only)
+TLS() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server();
+
+// 1. Attacker doesn't know any random or private keys but can snoop on the network connection
+AttackerNetworkSnoopOnly1() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server() ||| (||| clientID:{0..NoOfClients-1} @ AttackerNetworkSnoopOnly(clientID));
+
+// 2. Attacker knows the server's private keys only AND can snoop on the network connection. Attacker doesn't know the random keys.
+AttackerKnowsServerPrivateKey2() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server() ||| (||| clientID:{0..NoOfClients-1} @ AttackerKnowsServerPrivateKey(clientID));
+
+// 3. Attacker knows the random keys (of client only) but doesn't know server's private key, but can snoop on the network connection
+AttackerKnowsClientRandomKeyOnly3() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server() ||| (||| clientID:{0..NoOfClients-1} @ AttackerKnowsClientRandomKeyOnly(clientID));
+
+// 4. Attacker knows the random keys (of server only) but doesn't know server's private key, but can snoop on the network connection
+AttackerKnowsServerRandomKeyOnly4() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server() ||| (||| clientID:{0..NoOfClients-1} @ AttackerKnowsServerRandomKeyOnly(clientID));
+
+// 5. Attacker knows the random keys (of both client and server), knows the server's private key, and can snoop on the network connection.
+AttackerKnowsEverything5() = (||| clientID:{0..NoOfClients-1} @ Client(clientID)) ||| Server() ||| (||| clientID:{0..NoOfClients-1} @ AttackerKnowsEverything(clientID));
+
+
+// =====================================
+// Goals
+// =====================================
+// Normal TLS process goals
+#define sameClientServerKeyGoal serverPreMasterKey[0] == clientPreMasterKey[0];
+#define correctClientMessageReceivedByServerGoal serverMessagesReceived[0] == clientMessagesToSend[0];
+#define correctServerMessageReceivedByClientGoal clientMessagesReceived[0] == serverMessagesToSend[0];
+
+// Attack goals (as long as one succeeds, attack is a success)
+#define attackerSamePreMasterKeyAsServer attackerPreMasterKey[0] == serverPreMasterKey[0];
+#define attackerSamePreMasterKeyAsClient attackerPreMasterKey[0] == clientPreMasterKey[0];
+
+
+// =====================================
+// Verifications
+// =====================================
+
+// 0. Normal TLS process without any attackers (i.e. client and server only)
+#assert TLS() deadlockfree; // Check for deadlock free
+#assert TLS() reaches sameClientServerKeyGoal; // Check that generated premaster keys are the same
+#assert TLS() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
+#assert TLS() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
+
+// 1. Attacker doesn't know any random or private keys but can snoop on the network connection
+#assert AttackerNetworkSnoopOnly1() deadlockfree; // Check for deadlock free
+#assert AttackerNetworkSnoopOnly1() reaches sameClientServerKeyGoal; // Check that generated premaster keys are the same
+#assert AttackerNetworkSnoopOnly1() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
+#assert AttackerNetworkSnoopOnly1() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
+#assert AttackerNetworkSnoopOnly1() reaches attackerSamePreMasterKeyAsServer; // Check if attacker manages to generate same preMasterKey as server
+#assert AttackerNetworkSnoopOnly1() reaches attackerSamePreMasterKeyAsClient; // Check if attacker manages to generate same preMasterKey as client
+
+// 2. Attacker knows the server's private keys only AND can snoop on the network connection. Attacker doesn't know the random keys.
+#assert AttackerKnowsServerPrivateKey2() deadlockfree; // Check for deadlock free
+#assert AttackerKnowsServerPrivateKey2() reaches sameClientServerKeyGoal; // Check that generated premaster keys are the same
+#assert AttackerKnowsServerPrivateKey2() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
+#assert AttackerKnowsServerPrivateKey2() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
+#assert AttackerKnowsServerPrivateKey2() reaches attackerSamePreMasterKeyAsServer; // Check if attacker manages to generate same preMasterKey as server
+#assert AttackerKnowsServerPrivateKey2() reaches attackerSamePreMasterKeyAsClient; // Check if attacker manages to generate same preMasterKey as client
+
+// 3. Attacker knows the random keys (of client only) but doesn't know server's private key, but can snoop on the network connection
+#assert AttackerKnowsClientRandomKeyOnly3() deadlockfree; // Check for deadlock free
+#assert AttackerKnowsClientRandomKeyOnly3() reaches sameClientServerKeyGoal; // Check that generated premaster keys are the same
+#assert AttackerKnowsClientRandomKeyOnly3() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
+#assert AttackerKnowsClientRandomKeyOnly3() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
+#assert AttackerKnowsClientRandomKeyOnly3() reaches attackerSamePreMasterKeyAsServer; // Check if attacker manages to generate same preMasterKey as server
+#assert AttackerKnowsClientRandomKeyOnly3() reaches attackerSamePreMasterKeyAsClient; // Check if attacker manages to generate same preMasterKey as client
+
+// 4. Attacker knows the random keys (of server only) but doesn't know server's private key, but can snoop on the network connection
+#assert AttackerKnowsServerRandomKeyOnly4() deadlockfree; // Check for deadlock free
+#assert AttackerKnowsServerRandomKeyOnly4() reaches sameClientServerKeyGoal; // Check that generated premaster keys are the same
+#assert AttackerKnowsServerRandomKeyOnly4() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
+#assert AttackerKnowsServerRandomKeyOnly4() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
+#assert AttackerKnowsServerRandomKeyOnly4() reaches attackerSamePreMasterKeyAsServer; // Check if attacker manages to generate same preMasterKey as server
+#assert AttackerKnowsServerRandomKeyOnly4() reaches attackerSamePreMasterKeyAsClient; // Check if attacker manages to generate same preMasterKey as client
+
+// 5. Attacker knows the random keys (of both client and server), knows the server's private key, and can snoop on the network connection.
+#assert AttackerKnowsEverything5() deadlockfree; // Check for deadlock free
+#assert AttackerKnowsEverything5() reaches sameClientServerKeyGoal; // Check that generated premaster keys are the same
+#assert AttackerKnowsEverything5() reaches correctClientMessageReceivedByServerGoal; // Check that server receives client message properly (encrypted decrypted using premaster key)
+#assert AttackerKnowsEverything5() reaches correctServerMessageReceivedByClientGoal; // Check that client receives server message properly (encrypted decrypted using premaster key)
+#assert AttackerKnowsEverything5() reaches attackerSamePreMasterKeyAsServer; // Check if attacker manages to generate same preMasterKey as server
+#assert AttackerKnowsEverything5() reaches attackerSamePreMasterKeyAsClient; // Check if attacker manages to generate same preMasterKey as client
