@@ -102,12 +102,13 @@ ClientConnected(clientID) =
 // =====================================
 // Attacker processes
 // - An attacker can have various abilities, including snooping on the network to reconstruct messages.
-// - In our case, we explore 3 different scenarios.
+// - In our case, we explore 5 different scenarios.
 //   1. Attacker doesn't know any random or private keys but can snoop on the network connection
 //   2. Attacker knows the server's private keys only AND can snoop on the network connection
 //   3. Attacker knows the random keys (of client only) but doesn't know server's private key, but can snoop on the network connection
 //   4. Attacker knows the random keys (of server only) but doesn't know server's private key, but can snoop on the network connection
-//      Note: There's no point in knowing both random keys and not knowing server's private key, since it's the same as just using serverMessage (unhashed) to generate PreMasterKey with client's random key.
+//      Note: There's no point in knowing both random keys and not knowing server's private key,
+//            since it's the same as just using serverMessage (unhashed) to generate PreMasterKey with client's random key.
 //   5. Attacker knows the random keys (of both client and server), knows the server's private key, and can snoop on the network connection.
 // ===================================== 
 

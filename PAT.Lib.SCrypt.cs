@@ -18,7 +18,7 @@ namespace PAT.Lib
     ///
     /// Note: method names are case sensetive
     /// </summary>
-    public class Crypt
+    public class SCrypt
     {
 	    public static int encrypt(int message, int publicKey)
         {
