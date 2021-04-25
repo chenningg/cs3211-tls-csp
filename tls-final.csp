@@ -174,7 +174,6 @@ Server() =
 // Send server hello back to client
 ServerHello(client, clientID) =
 	network!client.cipherSuite -> // Send cipher suite chosen (DHE)
-	// EncryptServerMessage{serverMessage[clientID] = call(encrypt, serverMessage[clientID], serverPrivateKey) } -> 
 	network!client.serverMessage[clientID] -> // Send server message to client
 	ServerSendCert(client, clientID);
 
